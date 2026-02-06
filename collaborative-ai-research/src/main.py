@@ -202,24 +202,39 @@ class ResearchTeam:
         })
 
         try:
-            # Phase 1: Coordinator decomposes the task
-            task_plan = await self._coordinator.decompose_task(sanitized_query, **kwargs)
+            fast_mode = os.getenv("FAST_MODE", "").lower() in {"1", "true", "yes"}
 
-            # Phase 2: Execute subtasks via assigned agents
-            agent_results = await self._coordinator.execute_plan(task_plan)
+            if fast_mode:
+                # Fast path: single-agent response (researcher only)
+                agent_results = [
+                    await self._researcher.execute_task({"query": sanitized_query, **kwargs})
+                ]
+                verification = {"score": 0.0, "notes": "fast_mode"}
+                synthesis = {
+                    "summary": (agent_results[0].get("result") or {}).get("summary", ""),
+                    "sources": (agent_results[0].get("result") or {}).get("sources", []),
+                    "confidence": (agent_results[0].get("result") or {}).get("confidence", 0.0),
+                }
+                task_plan = {"mode": "fast_mode"}
+            else:
+                # Phase 1: Coordinator decomposes the task
+                task_plan = await self._coordinator.decompose_task(sanitized_query, **kwargs)
 
-            # Phase 3: Cross-verify results
-            verification = await self._cross_checker.verify(
-                agent_results,
-                agents=[self._researcher, self._analyst],
-            )
+                # Phase 2: Execute subtasks via assigned agents
+                agent_results = await self._coordinator.execute_plan(task_plan)
 
-            # Phase 4: Synthesize final output
-            synthesis = await self._synthesizer.synthesize(
-                query=sanitized_query,
-                findings=agent_results,
-                verification=verification,
-            )
+                # Phase 3: Cross-verify results
+                verification = await self._cross_checker.verify(
+                    agent_results,
+                    agents=[self._researcher, self._analyst],
+                )
+
+                # Phase 4: Synthesize final output
+                synthesis = await self._synthesizer.synthesize(
+                    query=sanitized_query,
+                    findings=agent_results,
+                    verification=verification,
+                )
 
             # Security: Filter output
             filtered_summary = self._output_filter.filter(synthesis.get("summary", ""))

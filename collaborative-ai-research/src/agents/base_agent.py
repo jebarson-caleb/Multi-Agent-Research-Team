@@ -182,7 +182,11 @@ class BaseAgent(ABC):
         self._name = config.get("name", self.__class__.__name__)
         self._role = self._get_role()
         self._model = config.get("model", os.getenv("DEFAULT_MODEL", "gemini-2.5-flash"))
-        self._max_tokens = config.get("max_tokens", 4096)
+        env_max_tokens = os.getenv("MAX_TOKENS", "")
+        if env_max_tokens.isdigit():
+            self._max_tokens = int(env_max_tokens)
+        else:
+            self._max_tokens = config.get("max_tokens", 4096)
         self._temperature = config.get("temperature", 0.3)
         self._system_prompt = config.get("system_prompt", "")
 
