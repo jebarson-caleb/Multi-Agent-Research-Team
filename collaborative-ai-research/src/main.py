@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -133,10 +134,27 @@ class ResearchTeam:
 
     def _load_configs(self) -> dict[str, Any]:
         """Load all configuration files."""
+        def resolve_env(value: Any) -> Any:
+            if isinstance(value, dict):
+                return {k: resolve_env(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [resolve_env(v) for v in value]
+            if isinstance(value, str):
+                pattern = re.compile(r"\$\{([A-Z0-9_]+)(?::-([^}]*))?\}")
+
+                def repl(match: re.Match[str]) -> str:
+                    var = match.group(1)
+                    default = match.group(2) or ""
+                    return os.getenv(var, default)
+
+                return pattern.sub(repl, value)
+            return value
+
         configs = {}
         for config_file in self._config_dir.glob("*.yaml"):
             with open(config_file, "r") as f:
-                configs[config_file.stem] = yaml.safe_load(f)
+                raw = yaml.safe_load(f)
+                configs[config_file.stem] = resolve_env(raw)
         return configs
 
     def _setup_message_bus(self) -> None:

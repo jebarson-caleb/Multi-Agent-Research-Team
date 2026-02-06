@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Any, Callable, Optional
 
 import openai
+import aiohttp
 from openai import AsyncOpenAI, RateLimitError, APIConnectionError, InternalServerError
 from tenacity import (
     retry,
@@ -281,10 +282,15 @@ class BaseAgent(ABC):
                 **kwargs,
             )
 
-            # Extract response data (OpenAI chat completion format)
-            content = response.choices[0].message.content if response.choices else ""
-            tokens_input = response.usage.prompt_tokens if response.usage else 0
-            tokens_output = response.usage.completion_tokens if response.usage else 0
+            # Extract response data
+            if isinstance(response, dict):
+                content = response.get("content", "")
+                tokens_input = response.get("tokens_input", 0)
+                tokens_output = response.get("tokens_output", 0)
+            else:
+                content = response.choices[0].message.content if response.choices else ""
+                tokens_input = response.usage.prompt_tokens if response.usage else 0
+                tokens_output = response.usage.completion_tokens if response.usage else 0
 
             # Update metrics
             latency = time.time() - start_time
@@ -335,6 +341,7 @@ class BaseAgent(ABC):
             openai.RateLimitError,
             openai.InternalServerError,
             openai.APIConnectionError,
+            aiohttp.ClientError,
         )),
     )
     async def _make_api_call(
@@ -349,6 +356,22 @@ class BaseAgent(ABC):
         Uses tenacity for automatic retry with exponential backoff
         on rate limit, server, and connection errors.
         """
+        provider = os.getenv("API_PROVIDER", "openai").lower()
+        if provider in {"google", "google_ai", "google_ai_studio", "gemini"}:
+            return await self._make_google_api_call(
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                **kwargs,
+            )
+        if provider in {"ollama", "local", "llama_cpp"}:
+            return await self._make_ollama_api_call(
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                **kwargs,
+            )
+
         client = self._get_client()
         return await client.chat.completions.create(
             model=self._model,
@@ -357,6 +380,118 @@ class BaseAgent(ABC):
             messages=messages,
             **kwargs,
         )
+
+    def _normalize_google_model(self, model: str) -> str:
+        """Normalize model names for Google AI Studio."""
+        model_name = model.replace("models/", "")
+        if model_name.startswith("gpt-"):
+            return "gemini-2.0-flash"
+        if not model_name.startswith("gemini-"):
+            return "gemini-2.0-flash"
+        return model_name
+
+    async def _make_google_api_call(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Call Google AI Studio (Gemini) API using generateContent."""
+        api_key = os.getenv("API_KEY", "")
+        base_url = os.getenv("API_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
+        if not api_key:
+            raise ValueError(
+                "API_KEY environment variable not set. "
+                "Set it in your .env file or environment."
+            )
+
+        system_instruction = None
+        contents: list[dict[str, Any]] = []
+        for message in messages:
+            role = message.get("role", "user")
+            content = message.get("content", "")
+            if role == "system":
+                system_instruction = content
+                continue
+            gemini_role = "model" if role == "assistant" else "user"
+            contents.append({"role": gemini_role, "parts": [{"text": content}]})
+
+        payload: dict[str, Any] = {
+            "contents": contents,
+            "generationConfig": {
+                "maxOutputTokens": max_tokens,
+                "temperature": temperature,
+            },
+        }
+        if system_instruction:
+            payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+
+        model_name = self._normalize_google_model(self._model)
+        url = f"{base_url}/models/{model_name}:generateContent"
+        params = {"key": api_key}
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, params=params, json=payload) as response:
+                data = await response.json()
+                if response.status >= 400:
+                    message = data.get("error", {}).get("message", str(data))
+                    raise RuntimeError(f"Google AI Studio error: {message}")
+
+        content_text = ""
+        candidates = data.get("candidates", [])
+        if candidates:
+            parts = candidates[0].get("content", {}).get("parts", [])
+            content_text = "".join(p.get("text", "") for p in parts)
+
+        usage = data.get("usageMetadata", {})
+        tokens_input = usage.get("promptTokenCount", 0)
+        tokens_output = usage.get("candidatesTokenCount", 0)
+
+        return {
+            "content": content_text,
+            "tokens_input": tokens_input,
+            "tokens_output": tokens_output,
+        }
+
+    async def _make_ollama_api_call(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Call a local Ollama server using the chat API."""
+        base_url = os.getenv("API_BASE_URL", "http://localhost:11434")
+        url = f"{base_url}/api/chat"
+
+        payload: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+            },
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload) as response:
+                data = await response.json()
+                if response.status >= 400:
+                    message = data.get("error", str(data))
+                    raise RuntimeError(f"Ollama error: {message}")
+
+        message = data.get("message", {})
+        content_text = message.get("content", "")
+        tokens_input = data.get("prompt_eval_count", 0)
+        tokens_output = data.get("eval_count", 0)
+
+        return {
+            "content": content_text,
+            "tokens_input": tokens_input,
+            "tokens_output": tokens_output,
+        }
 
     async def get_compressed_context(self, namespace: str = "global") -> str:
         """Get compressed shared context for this agent.

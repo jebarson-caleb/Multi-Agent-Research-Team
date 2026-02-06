@@ -4,7 +4,7 @@
 coordinator:
   name: "Coordinator"
   description: "Orchestrates research tasks, delegates to specialists, manages workflow"
-  model: "${COORDINATOR_MODEL:-gemini-2.5-flash}"
+  model: "${COORDINATOR_MODEL:-gemini-2.0-flash}"
   max_tokens: 4096
   temperature: 0.3
   system_prompt: |
@@ -28,7 +28,7 @@ coordinator:
 researcher:
   name: "Researcher"
   description: "Gathers information, searches sources, extracts facts"
-  model: "${DEFAULT_MODEL:-gemini-2.5-flash}"
+  model: "${DEFAULT_MODEL:-gemini-2.0-flash}"
   max_tokens: 4096
   temperature: 0.4
   system_prompt: |
@@ -51,7 +51,7 @@ researcher:
 analyst:
   name: "Analyst"
   description: "Analyzes data, identifies patterns, generates insights"
-  model: "${DEFAULT_MODEL:-gemini-2.5-flash}"
+  model: "${DEFAULT_MODEL:-gemini-2.0-flash}"
   max_tokens: 4096
   temperature: 0.2
   system_prompt: |
@@ -74,7 +74,7 @@ analyst:
 synthesizer:
   name: "Synthesizer"
   description: "Synthesizes findings into coherent reports and summaries"
-  model: "${DEFAULT_MODEL:-gemini-2.5-flash}"
+  model: "${DEFAULT_MODEL:-gemini-2.0-flash}"
   max_tokens: 8192
   temperature: 0.5
   system_prompt: |

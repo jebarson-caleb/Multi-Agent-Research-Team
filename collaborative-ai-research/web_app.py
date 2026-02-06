@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from typing import Any
+import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -13,6 +14,34 @@ from src.main import ResearchTeam
 
 app = FastAPI(title="Collaborative AI Research Team")
 team = ResearchTeam()
+
+
+def _is_demo_mode() -> bool:
+  return os.getenv("DEMO_MODE", "").lower() in {"1", "true", "yes"}
+
+
+def _demo_result(query: str) -> dict[str, Any]:
+  return {
+    "query": query,
+    "summary": (
+      "Demo mode is active. The live model call is skipped due to "
+      "free-tier quota limits. This is a placeholder summary."
+    ),
+    "detailed_findings": [
+      {
+        "fact": "Live API calls are disabled in demo mode.",
+        "confidence": 0.5,
+        "source": "demo",
+      }
+    ],
+    "sources": ["demo"],
+    "confidence": 0.5,
+    "verification_score": 0.0,
+    "token_usage": 0,
+    "cost": 0.0,
+    "duration": 0.01,
+    "metadata": {"demo_mode": True},
+  }
 
 
 class ResearchRequest(BaseModel):
@@ -111,6 +140,9 @@ async def api_research(payload: ResearchRequest) -> JSONResponse:
     query = payload.query.strip()
     if not query:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    if _is_demo_mode():
+        return JSONResponse(content=_demo_result(query))
 
     try:
         result = await team.aresearch(query)
