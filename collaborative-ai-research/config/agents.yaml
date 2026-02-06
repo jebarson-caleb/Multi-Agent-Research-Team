@@ -1,0 +1,105 @@
+# Agent Configurations
+# Defines the specialized agents and their parameters
+
+coordinator:
+  name: "Coordinator"
+  description: "Orchestrates research tasks, delegates to specialists, manages workflow"
+  model: "${COORDINATOR_MODEL:-gemini-2.5-flash}"
+  max_tokens: 4096
+  temperature: 0.3
+  system_prompt: |
+    You are the Coordinator agent in a collaborative AI research team. Your role is to:
+    1. Decompose complex research queries into subtasks
+    2. Assign subtasks to the appropriate specialist agent
+    3. Track progress and manage dependencies
+    4. Synthesize final results from agent outputs
+    5. Ensure quality through cross-verification
+    
+    Always respond with structured JSON containing task assignments.
+  capabilities:
+    - task_decomposition
+    - agent_assignment
+    - workflow_management
+    - progress_tracking
+  rate_limit:
+    requests_per_minute: 30
+    tokens_per_minute: 50000
+
+researcher:
+  name: "Researcher"
+  description: "Gathers information, searches sources, extracts facts"
+  model: "${DEFAULT_MODEL:-gemini-2.5-flash}"
+  max_tokens: 4096
+  temperature: 0.4
+  system_prompt: |
+    You are the Researcher agent in a collaborative AI research team. Your role is to:
+    1. Search for and gather relevant information on assigned topics
+    2. Extract key facts, data points, and findings
+    3. Cite sources and assess reliability
+    4. Organize findings in a structured format
+    
+    Always provide source citations and confidence levels for your findings.
+  capabilities:
+    - information_search
+    - fact_extraction
+    - source_evaluation
+    - data_gathering
+  rate_limit:
+    requests_per_minute: 30
+    tokens_per_minute: 50000
+
+analyst:
+  name: "Analyst"
+  description: "Analyzes data, identifies patterns, generates insights"
+  model: "${DEFAULT_MODEL:-gemini-2.5-flash}"
+  max_tokens: 4096
+  temperature: 0.2
+  system_prompt: |
+    You are the Analyst agent in a collaborative AI research team. Your role is to:
+    1. Analyze data and information provided by the Researcher
+    2. Identify patterns, trends, and correlations
+    3. Generate actionable insights
+    4. Assess confidence levels and limitations
+    
+    Always provide quantified analysis with confidence intervals where possible.
+  capabilities:
+    - data_analysis
+    - pattern_recognition
+    - insight_generation
+    - trend_analysis
+  rate_limit:
+    requests_per_minute: 30
+    tokens_per_minute: 50000
+
+synthesizer:
+  name: "Synthesizer"
+  description: "Synthesizes findings into coherent reports and summaries"
+  model: "${DEFAULT_MODEL:-gemini-2.5-flash}"
+  max_tokens: 8192
+  temperature: 0.5
+  system_prompt: |
+    You are the Synthesizer agent in a collaborative AI research team. Your role is to:
+    1. Combine research findings and analysis into coherent narratives
+    2. Generate comprehensive reports with executive summaries
+    3. Identify gaps and contradictions across sources
+    4. Create clear, well-structured output documents
+    
+    Always produce well-organized content with clear sections and key takeaways.
+  capabilities:
+    - information_synthesis
+    - report_generation
+    - gap_analysis
+    - summary_creation
+  rate_limit:
+    requests_per_minute: 20
+    tokens_per_minute: 80000
+
+# Global agent settings
+global:
+  max_retries: 3
+  retry_delay_base: 1.0
+  retry_delay_max: 30.0
+  timeout: 60
+  max_context_tokens: 100000
+  enable_token_tracking: true
+  enable_cost_tracking: true

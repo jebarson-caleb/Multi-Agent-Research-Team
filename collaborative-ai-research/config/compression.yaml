@@ -1,0 +1,105 @@
+# Compression Strategy Configuration
+# Defines how context is compressed for efficient sharing between agents
+
+strategies:
+  extractive:
+    enabled: true
+    description: "Extract key sentences based on importance scoring"
+    settings:
+      max_sentences: 50
+      min_importance_score: 0.3
+      keyword_boost: 1.5
+      position_weight: true  # First/last sentences weighted higher
+      dedup_threshold: 0.85  # Similarity threshold for deduplication
+
+  abstractive:
+    enabled: true
+    description: "Use LLM to generate semantic summaries"
+    settings:
+      model: "${DEFAULT_MODEL:-gemini-2.5-flash}"
+      max_summary_tokens: 500
+      temperature: 0.2
+      preserve_facts: true
+      preserve_numbers: true
+      summary_prompt: |
+        Compress the following context into a concise summary. 
+        Preserve all key facts, numbers, names, and conclusions.
+        Remove redundancy and verbose explanations.
+        Output ONLY the compressed summary.
+
+  hierarchical:
+    enabled: true
+    description: "Multi-level compression with different detail levels"
+    levels:
+      full:
+        max_tokens: null  # No compression
+        description: "Complete uncompressed context"
+      detailed:
+        max_tokens: 2000
+        description: "Detailed summary with key supporting evidence"
+      brief:
+        max_tokens: 500
+        description: "Brief summary with main points only"
+      ultra_brief:
+        max_tokens: 100
+        description: "One-paragraph executive summary"
+
+  incremental:
+    enabled: true
+    description: "Compress context incrementally as it grows"
+    settings:
+      trigger_threshold: 5000  # Tokens before compression triggers
+      compression_target: 0.4  # Target ratio (40% of original)
+      preserve_recent: 1000    # Always keep last N tokens uncompressed
+      merge_window: 3          # Number of segments to merge at a time
+
+# Priority-based retention
+priority_retention:
+  critical:
+    description: "Must never be compressed away"
+    examples:
+      - "Final conclusions"
+      - "Key decisions"
+      - "Error conditions"
+      - "Security findings"
+    retention: 1.0  # Always keep 100%
+
+  high:
+    description: "Important context to preserve"
+    examples:
+      - "Data analysis results"
+      - "Source citations"
+      - "Verified facts"
+    retention: 0.8  # Keep 80%
+
+  medium:
+    description: "Supporting context"
+    examples:
+      - "Methodology details"
+      - "Intermediate results"
+      - "Background information"
+    retention: 0.4  # Keep 40%
+
+  low:
+    description: "Nice-to-have context"
+    examples:
+      - "Verbose explanations"
+      - "Redundant information"
+      - "Raw data dumps"
+    retention: 0.1  # Keep 10%
+
+# Global compression settings
+global:
+  default_strategy: "extractive"
+  fallback_strategy: "hierarchical"
+  target_compression_ratio: 0.4  # 60% reduction target
+  max_context_tokens: 50000
+  compression_cache_ttl: 3600
+  enable_metrics: true
+  
+  # Token counting
+  token_model: "cl100k_base"  # tiktoken encoding
+  
+  # Quality assurance
+  min_information_retention: 0.95  # Must retain 95% of key information
+  validation_enabled: true

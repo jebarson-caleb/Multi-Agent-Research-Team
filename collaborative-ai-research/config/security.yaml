@@ -1,0 +1,170 @@
+# Security Policy Configuration
+# Defines security rules, rate limits, and compliance settings
+
+input_sanitization:
+  enabled: true
+  max_input_length: 100000  # characters
+  max_tokens_per_request: 10000
+  
+  # Prompt injection detection
+  prompt_injection:
+    enabled: true
+    sensitivity: "high"  # low, medium, high
+    action: "block"      # block, warn, log
+    patterns:
+      - "ignore previous instructions"
+      - "ignore all previous"
+      - "disregard above"
+      - "you are now"
+      - "new instructions"
+      - "override system"
+      - "forget everything"
+      - "act as if"
+      - "pretend you are"
+      - "jailbreak"
+      - "DAN mode"
+      - "developer mode"
+    # Regex patterns for more complex detection
+    regex_patterns:
+      - "(?i)ignore\\s+(all\\s+)?previous"
+      - "(?i)system\\s*:\\s*you\\s+are"
+      - "(?i)\\[\\s*system\\s*\\]"
+      - "(?i)<\\s*system\\s*>"
+
+  # Content type validation
+  allowed_content_types:
+    - "text/plain"
+    - "application/json"
+    - "text/markdown"
+
+output_filtering:
+  enabled: true
+  max_output_length: 50000  # characters
+  
+  # PII detection and redaction
+  pii_redaction:
+    enabled: true
+    types:
+      email:
+        pattern: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+        replacement: "[EMAIL_REDACTED]"
+      phone:
+        pattern: "(?:\\+?1[-.]?)?(?:\\(?\\d{3}\\)?[-.]?)?\\d{3}[-.]?\\d{4}"
+        replacement: "[PHONE_REDACTED]"
+      ssn:
+        pattern: "\\d{3}-\\d{2}-\\d{4}"
+        replacement: "[SSN_REDACTED]"
+      credit_card:
+        pattern: "\\d{4}[- ]?\\d{4}[- ]?\\d{4}[- ]?\\d{4}"
+        replacement: "[CC_REDACTED]"
+      ip_address:
+        pattern: "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"
+        replacement: "[IP_REDACTED]"
+
+  # Sensitive keywords to filter
+  sensitive_keywords:
+    - "password"
+    - "secret"
+    - "api_key"
+    - "access_token"
+    - "private_key"
+
+audit_logging:
+  enabled: true
+  log_path: "${AUDIT_LOG_PATH:-logs/audit.log}"
+  log_level: "INFO"
+  
+  # Tamper-evident logging
+  hash_chain:
+    enabled: true
+    algorithm: "sha256"
+  
+  # Log rotation
+  rotation:
+    max_size_mb: 100
+    backup_count: 10
+    compression: "gzip"
+  
+  # Retention
+  retention_days: 90
+  
+  # Events to log
+  events:
+    - "agent_request"
+    - "agent_response"
+    - "security_violation"
+    - "prompt_injection_attempt"
+    - "pii_redaction"
+    - "rate_limit_exceeded"
+    - "authentication_failure"
+    - "context_access"
+    - "encryption_operation"
+
+rate_limiting:
+  enabled: true
+  
+  # Global limits
+  global:
+    requests_per_minute: 60
+    tokens_per_minute: 100000
+    max_concurrent_requests: 10
+  
+  # Per-agent limits (override global)
+  per_agent:
+    coordinator:
+      requests_per_minute: 30
+      tokens_per_minute: 50000
+    researcher:
+      requests_per_minute: 30
+      tokens_per_minute: 50000
+    analyst:
+      requests_per_minute: 30
+      tokens_per_minute: 50000
+    synthesizer:
+      requests_per_minute: 20
+      tokens_per_minute: 80000
+
+  # Burst protection
+  burst:
+    enabled: true
+    max_burst_size: 10
+    refill_rate: 1.0  # tokens per second
+
+encryption:
+  enabled: true
+  algorithm: "AES-256-GCM"
+  key_derivation: "PBKDF2"
+  key_derivation_iterations: 100000
+  
+  # What to encrypt
+  encrypt_at_rest:
+    - "shared_context"
+    - "agent_outputs"
+    - "audit_logs"
+  
+  # Key rotation
+  key_rotation:
+    enabled: true
+    interval_days: 30
+
+access_control:
+  enabled: true
+  
+  # Agent permissions
+  permissions:
+    coordinator:
+      shared_memory: ["read", "write", "admin"]
+      agents: ["assign", "monitor", "terminate"]
+      workflows: ["create", "execute", "modify"]
+    researcher:
+      shared_memory: ["read", "write"]
+      agents: []
+      workflows: ["execute"]
+    analyst:
+      shared_memory: ["read", "write"]
+      agents: []
+      workflows: ["execute"]
+    synthesizer:
+      shared_memory: ["read", "write"]
+      agents: []
+      workflows: ["execute"]
